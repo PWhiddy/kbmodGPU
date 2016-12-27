@@ -8,7 +8,8 @@
 #ifndef FAKEASTEROID_H_
 #define FAKEASTEROID_H_
 
-#include <random>
+//#include <random>
+#include <cstdlib>
 #include <omp.h>
 #include <fitsio.h>
 #include "GeneratorPSF.h"

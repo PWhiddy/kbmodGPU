@@ -13,8 +13,8 @@ void FakeAsteroid::createImage(short *image, int width, int height,
 	float xpos, float ypos, psfMatrix psf, float asteroidLevel, float noiseLevel)
 {
 	//image = new short[width*height];
-	std::default_random_engine generator;
-	std::normal_distribution<double> noise(1000.0, 200.0);
+	//std::default_random_engine generator;
+	//std::normal_distribution<double> noise(1000.0, 200.0);
 
 	for (int i=0; i<height; ++i)
 	{
@@ -22,7 +22,7 @@ void FakeAsteroid::createImage(short *image, int width, int height,
 		#pragma omp parallel for
 		for (int j=0; j<width; ++j)
 		{
-			image[row+j] = std::max(noise(generator), 0.0)*noiseLevel;
+			image[row+j] = ((float) rand()) / ((float) RAND_MAX) * 300.0 + 700; //std::max(noise(generator), 0.0)*noiseLevel;
 		}
 	}
 
