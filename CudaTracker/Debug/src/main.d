@@ -182,59 +182,8 @@ src/main.o : ../src/main.cu \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/sstream \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/sstream.tcc \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/ctime \
-    /work/04101/tg834008/cfitsio/build/include/fitsio.h \
-    /work/04101/tg834008/cfitsio/build/include/longnam.h \
+    /work/04101/tg834008/kbmodGPU/CudaTracker/include/fitsio.h \
+    /work/04101/tg834008/kbmodGPU/CudaTracker/include/longnam.h \
     ../src/GeneratorPSF.h \
     ../src/FakeAsteroid.h \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/random \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/limits \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/random.h \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/vector \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/stl_construct.h \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/ext/alloc_traits.h \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/alloc_traits.h \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/stl_uninitialized.h \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/stl_vector.h \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/stl_bvector.h \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/vector.tcc \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/x86_64-unknown-linux-gnu/bits/opt_random.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/x86intrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/ia32intrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/mmintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/xmmintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/mm_malloc.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/emmintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/pmmintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/tmmintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/ammintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/smmintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/popcntintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/wmmintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/immintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/avxintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/avx2intrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/avx512fintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/avx512erintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/avx512pfintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/avx512cdintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/shaintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/lzcntintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/bmiintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/bmi2intrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/fmaintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/f16cintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/rtmintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/xtestintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/mm3dnow.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/prfchwintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/fma4intrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/xopintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/lwpintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/tbmintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/rdseedintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/fxsrintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/xsaveintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/xsaveoptintrin.h \
-    /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/adxintrin.h \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/random.tcc \
     /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/omp.h

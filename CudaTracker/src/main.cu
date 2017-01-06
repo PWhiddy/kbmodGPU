@@ -39,7 +39,7 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 	const int maxY = min(y+psfRad, height);
 	const int dx = maxX-minX;
 	const int dy = maxY-minY;
-	if (dx < 1 || dy < 1) return;
+	if (dx < psfRad || dy < psfRad) return;
 	// Read Image
 	/*__shared__*/ float convArea[13][13]; //convArea[dx][dy];
 	int xCorrection = x-psfRad < 0 ? 0 : psfDim-dx;
@@ -54,7 +54,7 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 		{
 		//	float value = float(image[0*width*height+(minX+i)*height+minY+j]);
 		//	sum += value;
-			convArea[i][j] = float(image[0*width*height+(minX+i)*height+minY+j]); //value;
+			convArea[i][j] = float(image[0*width*height+(minX+i)*height+minY+j]);//value;
 		}
 	}
 
@@ -74,12 +74,12 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 	{
 		#pragma unroll
 		for (int j=0; j<dy; ++j)
-		{
-			sumDifference += convArea[i][j] * psf[(i+xCorrection)*psfDim+j+yCorrection];
+	{
+			sumDifference += float(image[0*width*height+(minX+i)*height+minY+j])/*convArea[i][j]*/ * psf[(i+xCorrection)*psfDim+j+yCorrection];
 		}
 	}
 
-	results[0*width*height+x*height+y] = int(sumDifference);//*/convArea[psfRad][psfRad]);
+	results[0*width*height+x*height+y] = int(sumDifference*100.0);//*/convArea[psfRad][psfRad]);
 
 }
 
@@ -124,13 +124,14 @@ int main(int argc, char* argv[])
 
 	}
 
+	/*
 	// Load real image into first slot
 	ss << "../realImg.fits";
 	fits_open_data(&fptr, ss.str().c_str(), READONLY, &status);
 	fits_report_error(stderr, status);
 	ss.str("");
 	ss.clear();
-
+	*/
 
 	std::clock_t t1 = std::clock();
 
