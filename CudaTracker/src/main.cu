@@ -299,7 +299,7 @@ int main(int argc, char* argv[])
 	{
 		if (trajResult[i].lh > maxLikelyHood)
 		{
-			maxLikelyHood = trajResult.lh;
+			maxLikelyHood = trajResult[i].lh;
 			indexOfBest = i;
 		}
 	}
@@ -327,7 +327,7 @@ int main(int argc, char* argv[])
 		/* initialize status before calling fitsio routines */
 		status = 0;
 		/* Create file name */
-		ss << "Asteroid" << writeIndex+1 << ".fits";
+		ss << "../toyimages/original/T" << writeIndex+1 << ".fits";
 		fits_create_file(&fptr, ss.str().c_str(), &status);
 		ss.str("");
 		ss.clear();
@@ -342,7 +342,7 @@ int main(int argc, char* argv[])
 
 		status = 0;
 		/* Create file name */
-		ss << "AsteroidPSFConv" << writeIndex+1 << ".fits";
+		ss << "../toyimages/convolved/T" << writeIndex+1 << "conv.fits";
 		fits_create_file(&fptr, ss.str().c_str(), &status);
 		ss.str("");
 		ss.clear();
