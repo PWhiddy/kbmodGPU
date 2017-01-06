@@ -244,7 +244,7 @@ int main(int argc, char* argv[])
 	int velocitiesCount = 9;
 	float velocities [9] = { 0.80, 0.84, 0.88, 0.92, 0.96, 1.0, 1.04, 1.08, 1.12 }; 
 	int trajCount = anglesCount*velocitiesCount;
-	trajectoy *trajTests = new trajectory[trajCount];
+	trajectory *trajTests = new trajectory[trajCount];
 	for (int a=0; a<anglesCount; ++a)
 	{
 		for (int v=0; v<velocitiesCount; ++v)
