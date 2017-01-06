@@ -24,6 +24,22 @@ static void CheckCudaErrorAux (const char *, unsigned, const char *, cudaError_t
 #define CUDA_CHECK_RETURN(value) CheckCudaErrorAux(__FILE__,__LINE__, #value, value)
 
 /*
+ * A struct to represent a potential trajectory
+ */
+struct trajectory {
+	// Trajectory velocities
+	float xVel; 
+	float yVel;
+	// Likelyhood
+	float lh;
+	// Origin
+	int x; 
+	int y;
+	// Number of images summed
+	int itCount; 
+};
+
+/*
  * Device kernel that compares the provided PSF distribution to the distribution
  * around each pixel in the provided image
  */
@@ -39,9 +55,9 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 	const int maxY = min(y+psfRad, height);
 	const int dx = maxX-minX;
 	const int dy = maxY-minY;
-	if (dx < psfRad || dy < psfRad) return;
+	if (dx < 1 || dy < 1 ) return;
 	// Read Image
-	/*__shared__*/ float convArea[13][13]; //convArea[dx][dy];
+	///*__shared__*/ float convArea[13][13]; //convArea[dx][dy];
 	int xCorrection = x-psfRad < 0 ? 0 : psfDim-dx;
 	int yCorrection = y-psfRad < 0 ? 0 : psfDim-dy;
 
@@ -72,14 +88,50 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 	float sumDifference = 0.0;
 	for (int i=0; i<dx; ++i)
 	{
-		#pragma unroll
+		// #pragma unroll
 		for (int j=0; j<dy; ++j)
-	{
-			sumDifference += float(image[0*width*height+(minX+i)*height+minY+j])/*convArea[i][j]*/ * psf[(i+xCorrection)*psfDim+j+yCorrection];
+		{
+			sumDifference += float(image[0*width*height+(minX+i)*height+minY+j]) /*convArea[i][j]*/
+					 * psf[(i+xCorrection)*psfDim+j+yCorrection];
 		}
 	}
 
-	results[0*width*height+x*height+y] = int(sumDifference*100.0);//*/convArea[psfRad][psfRad]);
+	results[0*width*height+x*height+y] = int(sumDifference);//*/convArea[psfRad][psfRad]);
+
+}
+
+
+__global__ void searchImages(int width, int height, int imageCount, short *images, 
+			      int trajectoryCount, trajectory *tests, trajectory *results, int edgePadding)
+{
+
+	// Get trajectory origin
+	int x = blockIdx.x*32+threadIdx.x;
+	int y = blockIdx.y*32+threadIdx.y;
+	// Give up if any trajectories will hit image edges
+	if (x < edgePadding || x + edgePadding > width || y < edgePadding || y + edgePadding > height) return;
+
+	trajectory best = { .xVel = 0.0, .yVel = 0.0, .lh = 0.0, .x = x, .y = y, .itCount = trajectoryCount };
+	
+	for (int t=0; t<trajectoryCount; ++t)
+	{
+		float xVel = tests[t].xVel;
+		float yVel = tests[t].yVel;
+		float currentLikelyhood = 0.0;
+		for (int i=0; i<imageCount; ++i)
+		{
+			currentLikelyhood += float( images[ i*width*height + (x+int( xVel*float(i)))*height + y + int( yVel*float(i)) ] ); 	
+		}
+		
+		if ( currentLikelyhood > best.lh )
+		{
+			best.lh = currentLikelyhood;
+			best.xVel = xVel;
+			best.yVel = yVel;
+		}		
+	}	
+	
+	results[ x*height + y ] = best;	
 
 }
 
@@ -120,7 +172,7 @@ int main(int argc, char* argv[])
 
 		pixelArray[imageIndex] = new short[nelements];
 		asteroid->createImage(pixelArray[imageIndex], naxes[0], naxes[1],
-				0.000952*float(imageIndex)+0.25, 0.000885*float(imageIndex)+0.2, test, 450.0*kernelNorm, 0.5);
+	 	    0.000952*float(imageIndex)+0.25, 0.000885*float(imageIndex)+0.2, test, 450.0*kernelNorm, 0.5);
 
 	}
 
@@ -176,6 +228,58 @@ int main(int argc, char* argv[])
 	std::cout << imageCount << " images, " <<
 			1000.0*(t2 - t1)/(double) (CLOCKS_PER_SEC*imageCount) << " ms per image\n";
 
+	
+	///////////////// ADDING IMAGE SEARCHING CODE HERE ////////////////
+
+	
+	std::clock_t t1 = std::clock();
+
+	// Search images on GPU //
+	short **result = new short*[nelements];
+	float *devicePsf;
+	short *deviceImageSource;
+	short *deviceImageResult;
+
+	dim3 blocks(32,32);
+	dim3 threads(32,32);
+
+	// Allocate Device memory
+	CUDA_CHECK_RETURN(cudaMalloc((void **)&devicePsf, sizeof(float)*test.dim*test.dim));
+	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceImageSource, sizeof(short)*nelements));
+	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceImageResult, sizeof(short)*nelements));
+
+	CUDA_CHECK_RETURN(cudaMemcpy(devicePsf, test.kernel,
+			sizeof(float)*test.dim*test.dim, cudaMemcpyHostToDevice));
+
+	for (int procIndex=0; procIndex<imageCount; ++procIndex)
+	{
+
+		result[procIndex] = new short[nelements];
+		// Copy image to
+		CUDA_CHECK_RETURN(cudaMemcpy(deviceImageSource, pixelArray[procIndex],
+				sizeof(short)*nelements, cudaMemcpyHostToDevice));
+
+		convolvePSF<<<blocks, threads>>> (naxes[0], naxes[1], imageCount, deviceImageSource,
+				deviceImageResult, devicePsf, test.dim/2, test.dim); //gpuData, size);
+
+		CUDA_CHECK_RETURN(cudaMemcpy(result[procIndex], deviceImageResult,
+				sizeof(short)*nelements, cudaMemcpyDeviceToHost));
+	}
+
+	CUDA_CHECK_RETURN(cudaFree(devicePsf));
+	CUDA_CHECK_RETURN(cudaFree(deviceImageSource));
+	CUDA_CHECK_RETURN(cudaFree(deviceImageResult));
+
+	std::clock_t t2 = std::clock();
+
+	std::cout << imageCount << " images, " <<
+			1000.0*(t2 - t1)/(double) (CLOCKS_PER_SEC*imageCount) << " ms per image\n";
+
+
+
+
+	//////////////// END IMAGE SEARCHING CODE /////////////////
+
 
 	// Write images to file (TODO: encapsulate in method)
 	for (int writeIndex=0; writeIndex<imageCount; ++writeIndex)
@@ -198,7 +302,7 @@ int main(int argc, char* argv[])
 
 		status = 0;
 		/* Create file name */
-		ss << "AsteroidPSF" << writeIndex+1 << ".fits";
+		ss << "AsteroidPSFConv" << writeIndex+1 << ".fits";
 		fits_create_file(&fptr, ss.str().c_str(), &status);
 		ss.str("");
 		ss.clear();

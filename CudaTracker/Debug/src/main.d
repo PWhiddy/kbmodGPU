@@ -182,8 +182,8 @@ src/main.o : ../src/main.cu \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/sstream \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/sstream.tcc \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/ctime \
-    /work/04101/tg834008/kbmodGPU/CudaTracker/include/fitsio.h \
-    /work/04101/tg834008/kbmodGPU/CudaTracker/include/longnam.h \
+    ../include/fitsio.h \
+    ../include/longnam.h \
     ../src/GeneratorPSF.h \
     ../src/FakeAsteroid.h \
     /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/omp.h
