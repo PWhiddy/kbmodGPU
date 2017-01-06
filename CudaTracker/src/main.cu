@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <sstream>
 #include <ctime>
+#include <math.h>
 
 #include <fitsio.h>
 #include "GeneratorPSF.h"
@@ -232,48 +233,87 @@ int main(int argc, char* argv[])
 	///////////////// ADDING IMAGE SEARCHING CODE HERE ////////////////
 
 	
-	std::clock_t t1 = std::clock();
+	std::clock_t t3 = std::clock();
 
 	// Search images on GPU //
-	short **result = new short*[nelements];
-	float *devicePsf;
-	short *deviceImageSource;
-	short *deviceImageResult;
-
-	dim3 blocks(32,32);
-	dim3 threads(32,32);
-
-	// Allocate Device memory
-	CUDA_CHECK_RETURN(cudaMalloc((void **)&devicePsf, sizeof(float)*test.dim*test.dim));
-	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceImageSource, sizeof(short)*nelements));
-	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceImageResult, sizeof(short)*nelements));
-
-	CUDA_CHECK_RETURN(cudaMemcpy(devicePsf, test.kernel,
-			sizeof(float)*test.dim*test.dim, cudaMemcpyHostToDevice));
-
-	for (int procIndex=0; procIndex<imageCount; ++procIndex)
+	
+		
+	// Setup trajectories to test 
+	int anglesCount = 10;
+	float angles [10] = { 0.6, 1.2, 1.8, 2.4, 3.0, 3.6, 4.2, 4.8, 5.4, 6.0 };
+	int velocitiesCount = 9;
+	float velocities [9] = { 0.80, 0.84, 0.88, 0.92, 0.96, 1.0, 1.04, 1.08, 1.12 }; 
+	int trajCount = anglesCount*velocitiesCount;
+	trajectoy *trajTests = new trajectory[trajCount];
+	for (int a=0; a<anglesCount; ++a)
 	{
+		for (int v=0; v<velocitiesCount; ++v)
+		{
+			trajTests[a*velocitiesCount+v].xVel = cos(angles[a])*velocities[v];
+			trajTests[a*velocitiesCount+v].yVel = sin(angles[a])*velocities[v]; 
+		}
+	}
+	
+	//dim3 blocks(32,32);
+	//dim3 threads(32,32);
 
-		result[procIndex] = new short[nelements];
-		// Copy image to
-		CUDA_CHECK_RETURN(cudaMemcpy(deviceImageSource, pixelArray[procIndex],
-				sizeof(short)*nelements, cudaMemcpyHostToDevice));
+	// Allocate Host memory to store results in
+	trajectory* trajResult = new trajectory[nelements];
 
-		convolvePSF<<<blocks, threads>>> (naxes[0], naxes[1], imageCount, deviceImageSource,
-				deviceImageResult, devicePsf, test.dim/2, test.dim); //gpuData, size);
+	// Allocate Device memory 
+	trajectory *deviceTests;
+	trajectory *deviceSearchResults;
+	short *deviceImages;
 
-		CUDA_CHECK_RETURN(cudaMemcpy(result[procIndex], deviceImageResult,
-				sizeof(short)*nelements, cudaMemcpyDeviceToHost));
+	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceTests, sizeof(trajectory)*trajCount));
+	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceImages, sizeof(short)*nelements*imageCount));
+	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceSearchResults, sizeof(trajectory)*nelements));
+	
+
+	// Copy trajectories to search
+	CUDA_CHECK_RETURN(cudaMemcpy(deviceTests, trajTests,
+			sizeof(trajectory)*trajCount, cudaMemcpyHostToDevice));
+
+	// Copy over convolved images one at a time
+	for (int i=0; i<imageCount; ++i)
+	{
+		CUDA_CHECK_RETURN(cudaMemcpy(deviceImages, result[i],
+			sizeof(short)*nelements, cudaMemcpyHostToDevice));
 	}
 
-	CUDA_CHECK_RETURN(cudaFree(devicePsf));
-	CUDA_CHECK_RETURN(cudaFree(deviceImageSource));
-	CUDA_CHECK_RETURN(cudaFree(deviceImageResult));
+	// Launch Search
+	searchImages<<<blocks, threads>>> (naxes[0], naxes[1], imageCount, deviceImages,
+				trajCount, deviceTests, deviceSearchResults, 2*imageCount+int(psfSigma)+1);
 
-	std::clock_t t2 = std::clock();
+	// Read back results
+	CUDA_CHECK_RETURN(cudaMemcpy(trajResult, deviceSearchResults,
+				sizeof(trajectory)*nelements, cudaMemcpyDeviceToHost));
+
+	CUDA_CHECK_RETURN(cudaFree(deviceTests));
+	CUDA_CHECK_RETURN(cudaFree(deviceSearchResults));
+	CUDA_CHECK_RETURN(cudaFree(deviceImages));
+
+	int indexOfBest = 0;
+	float maxLikelyHood = 0.0;
+	for (int i=0; i<nelements; ++i)
+	{
+		if (trajResult[i].lh > maxLikelyHood)
+		{
+			maxLikelyHood = trajResult.lh;
+			indexOfBest = i;
+		}
+	}
+
+	trajectory bestT = trajResult[indexOfBest];	
+
+	std::clock_t t4 = std::clock();
+
+	std::cout << "Highest likelyhood of " << bestT.lh << " at x: " << bestT.x << ", y: " << bestT.y 
+				<< "  and velocity x: " << bestT.xVel << ", y: " << bestT.yVel << "\n" ;
 
 	std::cout << imageCount << " images, " <<
-			1000.0*(t2 - t1)/(double) (CLOCKS_PER_SEC*imageCount) << " ms per image\n";
+			1.0*(t4 - t3)/(double) (CLOCKS_PER_SEC) << " seconds to test " << trajCount 
+				<< " possible objects over " << nelements << " pixels. " << "\n";
 
 
 
@@ -328,6 +368,9 @@ int main(int argc, char* argv[])
 
 	delete[] pixelArray;
 	delete[] result;
+	
+	delete[] trajResult;
+	
 	delete gen;
 	delete asteroid;
 
