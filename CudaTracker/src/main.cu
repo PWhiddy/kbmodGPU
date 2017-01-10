@@ -15,6 +15,7 @@
 #include <sstream>
 #include <ctime>
 #include <math.h>
+//#include <algorithm>
 
 #include <fitsio.h>
 #include "GeneratorPSF.h"
@@ -62,29 +63,6 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 	int xCorrection = x-psfRad < 0 ? 0 : psfDim-dx;
 	int yCorrection = y-psfRad < 0 ? 0 : psfDim-dy;
 
-	/*
-	// float sum = 0.0;
-	for (int i=0; i<dx; ++i)
-	{
-		#pragma unroll
-		for (int j=0; j<dy; ++j)
-		{
-		//	float value = float(image[0*width*height+(minX+i)*height+minY+j]);
-		//	sum += value;
-			convArea[i][j] = float(image[0*width*height+(minX+i)*height+minY+j]);//value;
-		}
-	}
-
-	float sumDifference = 0.0;
-	for (int i=0; i<dx; ++i)
-	{
-		#pragma unroll
-		for (int j=0; j<dy; ++j)
-		{
-			sumDifference += convArea[i][j]/* /sum* / * psf[(i+xCorrection)*psfDim+j+yCorrection];
-		}
-	}
-	*/
 
 	float sumDifference = 0.0;
 	for (int i=0; i<dx; ++i)
@@ -97,7 +75,7 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 		}
 	}
 
-	results[0*width*height+x*height+y] = int(sumDifference);//*/convArea[psfRad][psfRad]);
+	results[x*height+y] = int(sumDifference);//*/convArea[psfRad][psfRad]);
 
 }
 
@@ -173,7 +151,7 @@ int main(int argc, char* argv[])
 
 		pixelArray[imageIndex] = new short[nelements];
 		asteroid->createImage(pixelArray[imageIndex], naxes[0], naxes[1],
-	 	    0.000952*float(imageIndex)+0.25, 0.000885*float(imageIndex)+0.2, test, 450.0*kernelNorm, 0.5);
+	 	    0.000952*float(imageIndex)+0.25, 0.002085*float(imageIndex)+0.2, test, 450.0*kernelNorm, 0.5);
 
 	}
 
@@ -239,10 +217,15 @@ int main(int argc, char* argv[])
 	
 		
 	// Setup trajectories to test 
-	int anglesCount = 10;
-	float angles [10] = { 0.6, 1.2, 1.8, 2.4, 3.0, 3.6, 4.2, 4.8, 5.4, 6.0 };
-	int velocitiesCount = 9;
-	float velocities [9] = { 0.80, 0.84, 0.88, 0.92, 0.96, 1.0, 1.04, 1.08, 1.12 }; 
+	const int anglesCount = 100;
+	float angles[anglesCount];
+	for (int an=0; an<anglesCount; ++an)
+	{
+		angles[an] = 6.283185*float(an)/float(anglesCount);
+	}
+	const int velocitiesCount = 16;
+	float velocities [velocitiesCount] = { 0.80, 0.82, 0.84, 0.86, 0.88, 0.90, 0.92,
+				  0.94, 0.96, 0.98, 1.00, 1.02, 1.04, 0.06, 1.08, 1.12 }; 
 	int trajCount = anglesCount*velocitiesCount;
 	trajectory *trajTests = new trajectory[trajCount];
 	for (int a=0; a<anglesCount; ++a)
@@ -281,9 +264,11 @@ int main(int argc, char* argv[])
 			sizeof(short)*nelements, cudaMemcpyHostToDevice));
 	}
 
+	int padding = 2*imageCount+int(psfSigma)+1;
+
 	// Launch Search
 	searchImages<<<blocks, threads>>> (naxes[0], naxes[1], imageCount, deviceImages,
-				trajCount, deviceTests, deviceSearchResults, 2*imageCount+int(psfSigma)+1);
+				trajCount, deviceTests, deviceSearchResults, padding);
 
 	// Read back results
 	CUDA_CHECK_RETURN(cudaMemcpy(trajResult, deviceSearchResults,
@@ -293,33 +278,29 @@ int main(int argc, char* argv[])
 	CUDA_CHECK_RETURN(cudaFree(deviceSearchResults));
 	CUDA_CHECK_RETURN(cudaFree(deviceImages));
 
-	int indexOfBest = 0;
-	float maxLikelyHood = 0.0;
-	for (int i=0; i<nelements; ++i)
+	
+	// Find most likely trajectories
+	/*
+	std::sort( trajResult, trajResult+nelements, [](trajectory a, trajectory b) { return a.lh < b.lh; } ); 	
+	*/
+	for (int i=0; i<15; ++i)
 	{
-		if (trajResult[i].lh > maxLikelyHood)
-		{
-			maxLikelyHood = trajResult[i].lh;
-			indexOfBest = i;
-		}
+		std::cout << i+1 << ". Likelyhood: "  << trajResult[i].lh << " at x: " << trajResult[i].x << ", y: " << trajResult[i].y
+                                << "  and velocity x: " << trajResult[i].xVel << ", y: " << trajResult[i].yVel << "\n" ;
 	}
-
-	trajectory bestT = trajResult[indexOfBest];	
 
 	std::clock_t t4 = std::clock();
 
-	std::cout << "Highest likelyhood of " << bestT.lh << " at x: " << bestT.x << ", y: " << bestT.y 
-				<< "  and velocity x: " << bestT.xVel << ", y: " << bestT.yVel << "\n" ;
-
 	std::cout << imageCount << " images, " <<
 			1.0*(t4 - t3)/(double) (CLOCKS_PER_SEC) << " seconds to test " << trajCount 
-				<< " possible objects over " << nelements << " pixels. " << "\n";
-
+				<< " possible trajectories starting from " << (nelements-padding) << " pixels. " << "\n";
 
 
 
 	//////////////// END IMAGE SEARCHING CODE /////////////////
 
+
+	std::cout << "Writing images to file... ";
 
 	// Write images to file (TODO: encapsulate in method)
 	for (int writeIndex=0; writeIndex<imageCount; ++writeIndex)
@@ -356,6 +337,8 @@ int main(int argc, char* argv[])
 		fits_report_error(stderr, status);
 
 	}
+
+	std::cout << "Done.\n";
 
 	// Finished!
 
