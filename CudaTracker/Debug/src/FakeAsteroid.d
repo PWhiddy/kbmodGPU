@@ -28,6 +28,18 @@ src/FakeAsteroid.o : ../src/FakeAsteroid.cpp \
     /usr/include/sys/sysmacros.h \
     /usr/include/bits/pthreadtypes.h \
     /usr/include/alloca.h \
+    /opt/apps/gcc/4.9.1/include/c++/4.9.1/cmath \
+    /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/cpp_type_traits.h \
+    /opt/apps/gcc/4.9.1/include/c++/4.9.1/ext/type_traits.h \
+    /usr/include/math.h \
+    /usr/include/bits/huge_val.h \
+    /usr/include/bits/huge_valf.h \
+    /usr/include/bits/huge_vall.h \
+    /usr/include/bits/inf.h \
+    /usr/include/bits/nan.h \
+    /usr/include/bits/mathdef.h \
+    /usr/include/bits/mathcalls.h \
+    /opt/apps/gcc/4.9.1/include/c++/4.9.1/limits \
     /opt/apps/gcc/4.9.1/lib/gcc/x86_64-unknown-linux-gnu/4.9.1/include/omp.h \
     ../include/fitsio.h \
     /usr/include/stdio.h \
@@ -47,17 +59,6 @@ src/FakeAsteroid.o : ../src/FakeAsteroid.cpp \
     /usr/include/bits/xopen_lim.h \
     ../include/longnam.h \
     ../src/GeneratorPSF.h \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/cmath \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/cpp_type_traits.h \
-    /opt/apps/gcc/4.9.1/include/c++/4.9.1/ext/type_traits.h \
-    /usr/include/math.h \
-    /usr/include/bits/huge_val.h \
-    /usr/include/bits/huge_valf.h \
-    /usr/include/bits/huge_vall.h \
-    /usr/include/bits/inf.h \
-    /usr/include/bits/nan.h \
-    /usr/include/bits/mathdef.h \
-    /usr/include/bits/mathcalls.h \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/iostream \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/ostream \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/ios \

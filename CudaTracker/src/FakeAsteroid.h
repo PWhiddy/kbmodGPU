@@ -10,6 +10,8 @@
 
 //#include <random>
 #include <cstdlib>
+#include <cmath>
+#include <limits>
 #include <omp.h>
 #include <fitsio.h>
 #include "GeneratorPSF.h"
@@ -20,6 +22,7 @@ class FakeAsteroid
 		FakeAsteroid();
 		void createImage(short *image, int width, int height,
 			float xpos, float ypox, psfMatrix psf, float asteroidLevel, float noiseLevel);
+		float generateGaussianNoise(float mu, float sigma);
 };
 
 #endif /* FAKEASTEROID_H_ */
