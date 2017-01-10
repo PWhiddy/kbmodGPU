@@ -26,8 +26,8 @@ void FakeAsteroid::createImage(short *image, int width, int height,
 		}
 	}
 
-	int xPixel = int(xpos * width);
-	int yPixel = int(ypos * height);
+	int xPixel = int(xpos);
+	int yPixel = int(ypos);
 	for (int i=0; i<psf.dim; ++i)
 	{
 		int x = xPixel+i;

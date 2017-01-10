@@ -41,6 +41,14 @@ struct trajectory {
 	int itCount; 
 };
 
+/* 
+ * For comparing trajectory structs, so that they can be sorted
+ */
+int compareTrajectory( const void * a, const void * b)
+{
+        return (int)(1000.0*(((trajectory*)b)->lh - ((trajectory*)a)->lh));
+}
+
 /*
  * Device kernel that compares the provided PSF distribution to the distribution
  * around each pixel in the provided image
@@ -88,9 +96,11 @@ __global__ void searchImages(int width, int height, int imageCount, short *image
 	int x = blockIdx.x*32+threadIdx.x;
 	int y = blockIdx.y*32+threadIdx.y;
 	// Give up if any trajectories will hit image edges
-	if (x < edgePadding || x + edgePadding > width || y < edgePadding || y + edgePadding > height) return;
+	if (x < edgePadding || x + edgePadding > width ||
+	    y < edgePadding || y + edgePadding > height) return;
 
-	trajectory best = { .xVel = 0.0, .yVel = 0.0, .lh = 0.0, .x = x, .y = y, .itCount = trajectoryCount };
+	trajectory best = { .xVel = 0.0, .yVel = 0.0, .lh = 0.0, 
+			     .x = x, .y = y, .itCount = trajectoryCount };
 	
 	for (int t=0; t<trajectoryCount; ++t)
 	{
@@ -99,7 +109,8 @@ __global__ void searchImages(int width, int height, int imageCount, short *image
 		float currentLikelyhood = 0.0;
 		for (int i=0; i<imageCount; ++i)
 		{
-			currentLikelyhood += float( images[ i*width*height + (x+int( xVel*float(i)))*height + y + int( yVel*float(i)) ] ); 	
+			currentLikelyhood += /*logf(0.0012*/float( images[ i*width*height + 
+				(x+int( xVel*float(i)))*height + y + int( yVel*float(i)) ] ); 	
 		}
 		
 		if ( currentLikelyhood > best.lh )
@@ -151,7 +162,7 @@ int main(int argc, char* argv[])
 
 		pixelArray[imageIndex] = new short[nelements];
 		asteroid->createImage(pixelArray[imageIndex], naxes[0], naxes[1],
-	 	    0.000952*float(imageIndex)+0.25, 0.002085*float(imageIndex)+0.2, test, 450.0*kernelNorm, 0.5);
+	 	    0.0*float(imageIndex)+250.0, 1.05*float(imageIndex)+200.0, test, 75.0*kernelNorm, 0.5);
 
 	}
 
@@ -260,7 +271,7 @@ int main(int argc, char* argv[])
 	// Copy over convolved images one at a time
 	for (int i=0; i<imageCount; ++i)
 	{
-		CUDA_CHECK_RETURN(cudaMemcpy(deviceImages, result[i],
+		CUDA_CHECK_RETURN(cudaMemcpy(deviceImages+nelements*i, result[i],
 			sizeof(short)*nelements, cudaMemcpyHostToDevice));
 	}
 
@@ -280,12 +291,11 @@ int main(int argc, char* argv[])
 
 	
 	// Find most likely trajectories
-	/*
-	std::sort( trajResult, trajResult+nelements, [](trajectory a, trajectory b) { return a.lh < b.lh; } ); 	
-	*/
+	qsort( trajResult, nelements, sizeof(trajectory), compareTrajectory);
+
 	for (int i=0; i<15; ++i)
 	{
-		std::cout << i+1 << ". Likelyhood: "  << trajResult[i].lh << " at x: " << trajResult[i].x << ", y: " << trajResult[i].y
+		std::cout << i+1 << ". Likelihood: "  << trajResult[i].lh << " at x: " << trajResult[i].x << ", y: " << trajResult[i].y
                                 << "  and velocity x: " << trajResult[i].xVel << ", y: " << trajResult[i].yVel << "\n" ;
 	}
 
@@ -358,7 +368,7 @@ int main(int argc, char* argv[])
 	delete asteroid;
 
 	return 0;
-}
+} 
 
 /**
  * Check the return value of the CUDA runtime API call and exit
