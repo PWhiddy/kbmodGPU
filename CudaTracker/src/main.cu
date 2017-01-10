@@ -73,17 +73,17 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 
 
 	float sumDifference = 0.0;
-	for (int i=0; i<dx; ++i)
+	for (int i=0; i<dx+1; ++i)
 	{
 		// #pragma unroll
-		for (int j=0; j<dy; ++j)
+		for (int j=0; j<dy+1; ++j)
 		{
-			sumDifference += float(image[0*width*height+(minX+i)*height+minY+j]) /*convArea[i][j]*/
+			sumDifference += float(image[(minX+i)*height+minY+j]) /*convArea[i][j]*/
 					 * psf[(i+xCorrection)*psfDim+j+yCorrection];
 		}
 	}
 
-	results[x*height+y] = int(sumDifference);//*/convArea[psfRad][psfRad]);
+	results[x*height+y] = int(sumDifference/*(float(psfDim*psfDim)/float(dx*dy))*/);//*/convArea[psfRad][psfRad]);
 
 }
 
@@ -109,8 +109,8 @@ __global__ void searchImages(int width, int height, int imageCount, short *image
 		float currentLikelyhood = 0.0;
 		for (int i=0; i<imageCount; ++i)
 		{
-			currentLikelyhood += /*logf(0.0012*/float( images[ i*width*height + 
-				(x+int( xVel*float(i)))*height + y + int( yVel*float(i)) ] ); 	
+			currentLikelyhood += logf(0.00149253*float( images[ i*width*height + 
+				(x+int( xVel*float(i)))*height + y + int( yVel*float(i)) ] )); 	
 		}
 		
 		if ( currentLikelyhood > best.lh )
@@ -158,11 +158,11 @@ int main(int argc, char* argv[])
 
 		/* Initialize the values in the image with noisy astro */
 
-		float kernelNorm = 1.0/test.kernel[test.dim/2*test.dim+test.dim/2];
+		//float kernelNorm = 1.0/test.kernel[test.dim/2*test.dim+test.dim/2];
 
 		pixelArray[imageIndex] = new short[nelements];
 		asteroid->createImage(pixelArray[imageIndex], naxes[0], naxes[1],
-	 	    1.0*float(imageIndex)+450.0, 0.0*float(imageIndex)+400.0, test, 35.0*kernelNorm, 0.5);
+	 	    1.0*float(imageIndex)+450.0, 0.0*float(imageIndex)+400.0, test, 500.0, 0.5);
 
 	}
 
