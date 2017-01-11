@@ -162,7 +162,7 @@ int main(int argc, char* argv[])
 
 		pixelArray[imageIndex] = new short[nelements];
 		asteroid->createImage(pixelArray[imageIndex], naxes[0], naxes[1],
-	 	    1.0*float(imageIndex)+450.0, 0.0*float(imageIndex)+400.0, test, 500.0, 0.5);
+	 	    0.5*float(imageIndex)+450.0, 0.866*float(imageIndex)+400.0, test, 500.0, 0.5);
 
 	}
 
@@ -292,18 +292,22 @@ int main(int argc, char* argv[])
 	
 	// Find most likely trajectories
 	qsort( trajResult, nelements, sizeof(trajectory), compareTrajectory);
-
+	
 	for (int i=0; i<15; ++i)
 	{
-		std::cout << i+1 << ". Likelihood: "  << trajResult[i].lh << " at x: " << trajResult[i].x << ", y: " << trajResult[i].y
-                                << "  and velocity x: " << trajResult[i].xVel << ", y: " << trajResult[i].yVel << "\n" ;
+		std::cout << i+1 << ". Likelihood: "  << trajResult[i].lh 
+				 << " at x: " << trajResult[i].x << ", y: " << trajResult[i].y
+                                 << "  and velocity x: " << trajResult[i].xVel 
+				 << ", y: " << trajResult[i].yVel << "\n" ;
 	}
+	
 
 	std::clock_t t4 = std::clock();
 
 	std::cout << imageCount << " images, " <<
-			1.0*(t4 - t3)/(double) (CLOCKS_PER_SEC) << " seconds to test " << trajCount 
-				<< " possible trajectories starting from " << (nelements-padding) << " pixels. " << "\n";
+			1.0*(t4 - t3)/(double) (CLOCKS_PER_SEC) << " seconds to test " 
+				<< trajCount << " possible trajectories starting from " 
+				<< (nelements-padding) << " pixels. " << "\n";
 
 
 
@@ -349,6 +353,19 @@ int main(int argc, char* argv[])
 	}
 
 	std::cout << "Done.\n";
+	
+	std::freopen("results.txt", "w", stdout);
+
+	std::cout << "# t0_x t0_y theta_par theta_perp v_x v_y likelihood est_flux\n";
+
+	
+	// THIS IS A SUPER HACKY SWAP! TODO: FLIP IMAGES TO MATCH CFTISI
+        for (int i=0; i<20; ++i)
+        {
+                std::cout << trajResult[i].x << " " << trajResult[i].y << " 0.0 0.0 "
+                          << trajResult[i].xVel << " " << trajResult[i].yVel << " "       
+                          << trajResult[i].lh << " 0.0\n" ;
+        }
 
 	// Finished!
 

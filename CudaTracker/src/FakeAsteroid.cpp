@@ -43,7 +43,7 @@ void FakeAsteroid::createImage(short *image, int width, int height,
 
 	for (int i=0; i<height; ++i)
 	{
-		int row = i*width;
+		int row = i*height;
 		#pragma omp parallel for
 		for (int j=0; j<width; ++j)
 		{
@@ -51,7 +51,7 @@ void FakeAsteroid::createImage(short *image, int width, int height,
 		}
 	}
 
-	int xPixel = int(xpos)-psf.dim/2-1;
+	int xPixel = int(xpos)-psf.dim/2-1; // This SO hacky, x and y are flipped. FIX!!
 	int yPixel = int(ypos)-psf.dim/2-1;
 	for (int i=0; i<psf.dim; ++i)
 	{
@@ -59,8 +59,8 @@ void FakeAsteroid::createImage(short *image, int width, int height,
 		for (int j=0; j<psf.dim; ++j)
 		{
 			int y = yPixel+j;
-			if (x<width && y<height)
-				image[x*width+y] += asteroidLevel*psf.kernel[i*psf.dim+j];
+			if (x<width && x > 0 && y<height && y>0)
+				image[x*height+y] += asteroidLevel*psf.kernel[i*psf.dim+j];
 		}
 	}
 }
