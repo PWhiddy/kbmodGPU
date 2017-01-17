@@ -22,12 +22,15 @@ float FakeAsteroid::generateGaussianNoise(float mu, float sigma)
 	   return z1 * sigma + mu;
 
 	float u1, u2;
-	do
-	 {
+
+	u1 = rand() * (1.0 / RAND_MAX);
+        u2 = rand() * (1.0 / RAND_MAX);	
+
+	while ( u1 <= epsilon )
+	{
 	   u1 = rand() * (1.0 / RAND_MAX);
 	   u2 = rand() * (1.0 / RAND_MAX);
-	 }
-	while ( u1 <= epsilon );
+	}
 
 	z0 = sqrt(-2.0 * log(u1)) * cos(two_pi * u2);
 	z1 = sqrt(-2.0 * log(u1)) * sin(two_pi * u2);
@@ -41,26 +44,26 @@ void FakeAsteroid::createImage(short *image, int width, int height,
 	//std::default_random_engine generator;
 	//std::normal_distribution<double> noise(1000.0, 200.0);
 
-	for (int i=0; i<height; ++i)
+	for (int j=0; j<height; ++j)
 	{
-		int row = i*height;
+		int row = j*width;
 		#pragma omp parallel for
-		for (int j=0; j<width; ++j)
+		for (int i=0; i<width; ++i)
 		{
-			image[row+j] = generateGaussianNoise( 700.0, 100.0); //std::max(noise(generator), 0.0)*noiseLevel;
+			image[row+i] = generateGaussianNoise( 700.0, 100.0); //std::max(noise(generator), 0.0)*noiseLevel;
 		}
 	}
 
-	int xPixel = int(xpos)-psf.dim/2-1; // This SO hacky, x and y are flipped. FIX!!
+	int xPixel = int(xpos)-psf.dim/2-1;
 	int yPixel = int(ypos)-psf.dim/2-1;
-	for (int i=0; i<psf.dim; ++i)
+	for (int j=0; j<psf.dim; ++j)
 	{
-		int x = xPixel+i;
-		for (int j=0; j<psf.dim; ++j)
+		int y = j+yPixel;
+		for (int i=0; i<psf.dim; ++i)
 		{
-			int y = yPixel+j;
+			int x = i+xPixel;
 			if (x<width && x > 0 && y<height && y>0)
-				image[x*height+y] += asteroidLevel*psf.kernel[i*psf.dim+j];
+				image[y*width+x] += int(asteroidLevel*psf.kernel[j*psf.dim+i]);
 		}
 	}
 }

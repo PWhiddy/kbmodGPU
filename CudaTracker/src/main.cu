@@ -61,8 +61,8 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 	const int y = blockIdx.y*32+threadIdx.y;
 	const int minX = max(x-psfRad, 0);
 	const int minY = max(y-psfRad, 0);
-	const int maxX = min(x+psfRad, width);
-	const int maxY = min(y+psfRad, height);
+	const int maxX = min(x+psfRad, width-1);
+	const int maxY = min(y+psfRad, height-1);
 	const int dx = maxX-minX;
 	const int dy = maxY-minY;
 	if (dx < 1 || dy < 1 ) return;
@@ -73,17 +73,17 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 
 
 	float sumDifference = 0.0;
-	for (int i=0; i<dx+1; ++i)
+	for (int j=minY; j<=maxY; ++j)
 	{
 		// #pragma unroll
-		for (int j=0; j<dy+1; ++j)
+		for (int i=minX; i<=maxX; ++i)
 		{
-			sumDifference += float(image[(minX+i)*height+minY+j]) /*convArea[i][j]*/
-					 * psf[(i+xCorrection)*psfDim+j+yCorrection];
+			sumDifference += float(image[j*width+i]) /*convArea[i][j]*/
+					 * psf[(j-minY)*psfDim+i-minX];
 		}
 	}
 
-	results[x*height+y] = int(sumDifference/*(float(psfDim*psfDim)/float(dx*dy))*/);//*/convArea[psfRad][psfRad]);
+	results[y*width+x] = int(sumDifference/*(float(psfDim*psfDim)/float(dx*dy))*/);//*/convArea[psfRad][psfRad]);
 
 }
 
@@ -110,7 +110,7 @@ __global__ void searchImages(int width, int height, int imageCount, short *image
 		for (int i=0; i<imageCount; ++i)
 		{
 			currentLikelyhood += logf(0.00149253*float( images[ i*width*height + 
-				(x+int( xVel*float(i)))*height + y + int( yVel*float(i)) ] )); 	
+				(y+int( yVel*float(i)))*width + x + int( xVel*float(i)) ] )); 	
 		}
 		
 		if ( currentLikelyhood > best.lh )
@@ -121,7 +121,7 @@ __global__ void searchImages(int width, int height, int imageCount, short *image
 		}		
 	}	
 	
-	results[ x*height + y ] = best;	
+	results[ y*width + x ] = best;	
 
 }
 
@@ -359,7 +359,7 @@ int main(int argc, char* argv[])
 	std::cout << "# t0_x t0_y theta_par theta_perp v_x v_y likelihood est_flux\n";
 
 	
-	// THIS IS A SUPER HACKY SWAP! TODO: FLIP IMAGES TO MATCH CFTISI
+	// std::cout needs to be rerouted to output to console after this...
         for (int i=0; i<20; ++i)
         {
                 std::cout << trajResult[i].x << " " << trajResult[i].y << " 0.0 0.0 "
