@@ -54,7 +54,7 @@ int compareTrajectory( const void * a, const void * b)
  * around each pixel in the provided image
  */
 __global__ void convolvePSF(int width, int height, int imageCount,
-		short *image, short *results, float *psf, int psfRad, int psfDim)
+		short *image, short *results, float *psf, int psfRad, int psfDim, float normalization)
 {
 	// Find bounds of image
 	const int x = blockIdx.x*32+threadIdx.x;
@@ -83,7 +83,7 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 		}
 	}
 
-	results[y*width+x] = int(sumDifference/*(float(psfDim*psfDim)/float(dx*dy))*/);//*/convArea[psfRad][psfRad]);
+	results[y*width+x] = int(sumDifference*normalization/*(float(psfDim*psfDim)/float(dx*dy))*/);//*/convArea[psfRad][psfRad]);
 
 }
 
@@ -137,7 +137,7 @@ int main(int argc, char* argv[])
 
 	psfMatrix test = gen->createGaussian(psfSigma);
 
-	gen->printPSF(test);
+	float psfCoverage = gen->printPSF(test);
 
 	FakeAsteroid *asteroid = new FakeAsteroid();
 
@@ -203,7 +203,7 @@ int main(int argc, char* argv[])
 				sizeof(short)*nelements, cudaMemcpyHostToDevice));
 
 		convolvePSF<<<blocks, threads>>> (naxes[0], naxes[1], imageCount, deviceImageSource,
-				deviceImageResult, devicePsf, test.dim/2, test.dim); //gpuData, size);
+				deviceImageResult, devicePsf, test.dim/2, test.dim, 1.0/psfCoverage); //gpuData, size);
 
 		CUDA_CHECK_RETURN(cudaMemcpy(result[procIndex], deviceImageResult,
 				sizeof(short)*nelements, cudaMemcpyDeviceToHost));

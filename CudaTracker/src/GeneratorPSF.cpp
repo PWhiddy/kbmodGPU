@@ -53,11 +53,11 @@ float GeneratorPSF::gaussian(float x, float twoSigSquare)
 	return exp(-x*x/(twoSigSquare));
 }
 
-void GeneratorPSF::printPSF(psfMatrix p)
+float GeneratorPSF::printPSF(psfMatrix p)
 {
-    std::cout.setf(std::ios::fixed,std::ios::floatfield);
-    std::cout.precision(3);
-    float sum = 0.0;
+    	std::cout.setf(std::ios::fixed,std::ios::floatfield);
+    	std::cout.precision(3);
+    	float sum = 0.0;
 	for (int row=0; row<p.dim; ++row)
 	{
 		std::cout << "| ";
@@ -72,4 +72,5 @@ void GeneratorPSF::printPSF(psfMatrix p)
 		std::cout << "\n";
 	}
 	std::cout << 100.0*sum << "% of PSF contained within kernel\n";
+	return sum;	
 }
