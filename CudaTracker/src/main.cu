@@ -162,7 +162,7 @@ int main(int argc, char* argv[])
 
 		pixelArray[imageIndex] = new short[nelements];
 		asteroid->createImage(pixelArray[imageIndex], naxes[0], naxes[1],
-	 	    0.5*float(imageIndex)+450.0, 0.866*float(imageIndex)+400.0, test, 500.0, 0.5);
+	 	    0.5*float(imageIndex)+450.0, 0.866*float(imageIndex)+400.0, test, 8000.0, 0.5);
 
 	}
 
