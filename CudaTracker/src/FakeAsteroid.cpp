@@ -37,25 +37,27 @@ float FakeAsteroid::generateGaussianNoise(float mu, float sigma)
 	return z0 * sigma + mu;
 }
 
-void FakeAsteroid::createImage(short *image, int width, int height,
-	float xpos, float ypos, psfMatrix psf, float asteroidLevel, float noiseLevel)
+void FakeAsteroid::createImage(float *image, int width, int height,
+	float xpos, float ypos, psfMatrix psf, float asteroidLevel, 
+			float backgroundLevel, float backgroundSigma)
 {
 	//image = new short[width*height];
 	//std::default_random_engine generator;
 	//std::normal_distribution<double> noise(1000.0, 200.0);
 
+	#pragma omp parallel for
 	for (int j=0; j<height; ++j)
 	{
 		int row = j*width;
-		#pragma omp parallel for
+
 		for (int i=0; i<width; ++i)
 		{
-			image[row+i] = generateGaussianNoise( 700.0, 100.0); //std::max(noise(generator), 0.0)*noiseLevel;
+			image[row+i] = generateGaussianNoise( backgroundLevel, backgroundSigma);
 		}
 	}
 
-	int xPixel = int(xpos)-psf.dim/2-1;
-	int yPixel = int(ypos)-psf.dim/2-1;
+	int xPixel = int(xpos)-psf.dim/2;
+	int yPixel = int(ypos)-psf.dim/2;
 	for (int j=0; j<psf.dim; ++j)
 	{
 		int y = j+yPixel;
@@ -63,7 +65,7 @@ void FakeAsteroid::createImage(short *image, int width, int height,
 		{
 			int x = i+xPixel;
 			if (x<width && x > 0 && y<height && y>0)
-				image[y*width+x] += int(asteroidLevel*psf.kernel[j*psf.dim+i]);
+				image[y*width+x] += asteroidLevel*psf.kernel[j*psf.dim+i];
 		}
 	}
 }

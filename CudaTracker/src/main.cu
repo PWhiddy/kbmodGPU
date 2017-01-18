@@ -1,9 +1,7 @@
 /*
  ============================================================================
- Name        :
+ Name        : KBMOD CUDA
  Author      : Peter Whidden
- Version     :
- Copyright   :
  Description :
  ============================================================================
  */
@@ -46,7 +44,7 @@ struct trajectory {
  */
 int compareTrajectory( const void * a, const void * b)
 {
-        return (int)(1000.0*(((trajectory*)b)->lh - ((trajectory*)a)->lh));
+        return (int)(5000.0*(((trajectory*)b)->lh - ((trajectory*)a)->lh));
 }
 
 /*
@@ -54,9 +52,9 @@ int compareTrajectory( const void * a, const void * b)
  * around each pixel in the provided image
  */
 __global__ void convolvePSF(int width, int height, int imageCount,
-		short *image, short *results, float *psf, int psfRad, int psfDim, float normalization)
+		float *image, float *results, float *psf, int psfRad, int psfDim, float background, float normalization)
 {
-	// Find bounds of image
+	// Find bounds of convolution area
 	const int x = blockIdx.x*32+threadIdx.x;
 	const int y = blockIdx.y*32+threadIdx.y;
 	const int minX = max(x-psfRad, 0);
@@ -66,29 +64,25 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 	const int dx = maxX-minX;
 	const int dy = maxY-minY;
 	if (dx < 1 || dy < 1 ) return;
-	// Read Image
-	///*__shared__*/ float convArea[13][13]; //convArea[dx][dy];
-	int xCorrection = x-psfRad < 0 ? 0 : psfDim-dx;
-	int yCorrection = y-psfRad < 0 ? 0 : psfDim-dy;
-
-
+ 
+	// Read kernel
 	float sumDifference = 0.0;
 	for (int j=minY; j<=maxY; ++j)
 	{
 		// #pragma unroll
 		for (int i=minX; i<=maxX; ++i)
 		{
-			sumDifference += float(image[j*width+i]) /*convArea[i][j]*/
+			sumDifference += (image[j*width+i] - background)
 					 * psf[(j-minY)*psfDim+i-minX];
 		}
 	}
 
-	results[y*width+x] = int(sumDifference*normalization/*(float(psfDim*psfDim)/float(dx*dy))*/);//*/convArea[psfRad][psfRad]);
+	results[y*width+x] = sumDifference*normalization;
 
 }
 
 
-__global__ void searchImages(int width, int height, int imageCount, short *images, 
+__global__ void searchImages(int width, int height, int imageCount, float *images, 
 			      int trajectoryCount, trajectory *tests, trajectory *results, int edgePadding)
 {
 
@@ -109,8 +103,8 @@ __global__ void searchImages(int width, int height, int imageCount, short *image
 		float currentLikelyhood = 0.0;
 		for (int i=0; i<imageCount; ++i)
 		{
-			currentLikelyhood += logf(0.00149253*float( images[ i*width*height + 
-				(y+int( yVel*float(i)))*width + x + int( xVel*float(i)) ] )); 	
+			currentLikelyhood += logf( images[ i*width*height + 
+				(y+int( yVel*float(i)))*width + x + int( xVel*float(i)) ] ); 	
 		}
 		
 		if ( currentLikelyhood > best.lh )
@@ -132,12 +126,20 @@ int main(int argc, char* argv[])
 	float psfSigma = argc > 1 ? atof(argv[1]) : 1.0;
 
 	int imageCount = argc > 2 ? atoi(argv[2]) : 1;
+	
+	float asteroidLevel = 500;
+	float initialX = 235.0;
+	float initialY = 680.0;
+	float velocityX = 0.6;
+	float velocityY = 0.75;
+	float backgroundLevel = 1024.0;
+	float backgroundSigma = 32.0;
 
 	GeneratorPSF *gen = new GeneratorPSF();
 
-	psfMatrix test = gen->createGaussian(psfSigma);
+	psfMatrix testPSF = gen->createGaussian(psfSigma);
 
-	float psfCoverage = gen->printPSF(test);
+	float psfCoverage = gen->printPSF(testPSF);
 
 	FakeAsteroid *asteroid = new FakeAsteroid();
 
@@ -150,7 +152,7 @@ int main(int argc, char* argv[])
 	long naxes[2] = { 1024, 1024 }; // X and Y dimensions
 	nelements = naxes[0] * naxes[1];
 	std::stringstream ss;
-	short **pixelArray = new short*[imageCount];
+	float **pixelArray = new float*[imageCount];
 
 	// Create asteroid images //
 	for (int imageIndex=0; imageIndex<imageCount; ++imageIndex)
@@ -158,11 +160,13 @@ int main(int argc, char* argv[])
 
 		/* Initialize the values in the image with noisy astro */
 
-		//float kernelNorm = 1.0/test.kernel[test.dim/2*test.dim+test.dim/2];
+		//float kernelNorm = 1.0/testPSF.kernel[testPSF.dim/2*testPSF.dim+testPSF.dim/2];
 
-		pixelArray[imageIndex] = new short[nelements];
-		asteroid->createImage(pixelArray[imageIndex], naxes[0], naxes[1],
-	 	    0.5*float(imageIndex)+450.0, 0.866*float(imageIndex)+400.0, test, 8000.0, 0.5);
+		pixelArray[imageIndex] = new float[nelements];
+		asteroid->createImage( pixelArray[imageIndex], naxes[0], naxes[1],
+	 	    		velocityX*float(imageIndex)+initialX,  // Asteroid X position 
+				velocityY*float(imageIndex)+initialY, // Asteroid Y position
+				testPSF, asteroidLevel, backgroundLevel, backgroundSigma);
 
 	}
 
@@ -178,35 +182,35 @@ int main(int argc, char* argv[])
 	std::clock_t t1 = std::clock();
 
 	// Process images on GPU //
-	short **result = new short*[nelements];
+	float **result = new float*[nelements];
 	float *devicePsf;
-	short *deviceImageSource;
-	short *deviceImageResult;
+	float *deviceImageSource;
+	float *deviceImageResult;
 
 	dim3 blocks(32,32);
 	dim3 threads(32,32);
 
 	// Allocate Device memory
-	CUDA_CHECK_RETURN(cudaMalloc((void **)&devicePsf, sizeof(float)*test.dim*test.dim));
-	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceImageSource, sizeof(short)*nelements));
-	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceImageResult, sizeof(short)*nelements));
+	CUDA_CHECK_RETURN(cudaMalloc((void **)&devicePsf, sizeof(float)*testPSF.dim*testPSF.dim));
+	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceImageSource, sizeof(float)*nelements));
+	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceImageResult, sizeof(float)*nelements));
 
-	CUDA_CHECK_RETURN(cudaMemcpy(devicePsf, test.kernel,
-			sizeof(float)*test.dim*test.dim, cudaMemcpyHostToDevice));
+	CUDA_CHECK_RETURN(cudaMemcpy(devicePsf, testPSF.kernel,
+			sizeof(float)*testPSF.dim*testPSF.dim, cudaMemcpyHostToDevice));
 
 	for (int procIndex=0; procIndex<imageCount; ++procIndex)
 	{
 
-		result[procIndex] = new short[nelements];
+		result[procIndex] = new float[nelements];
 		// Copy image to
 		CUDA_CHECK_RETURN(cudaMemcpy(deviceImageSource, pixelArray[procIndex],
-				sizeof(short)*nelements, cudaMemcpyHostToDevice));
+				sizeof(float)*nelements, cudaMemcpyHostToDevice));
 
 		convolvePSF<<<blocks, threads>>> (naxes[0], naxes[1], imageCount, deviceImageSource,
-				deviceImageResult, devicePsf, test.dim/2, test.dim, 1.0/psfCoverage); //gpuData, size);
+				deviceImageResult, devicePsf, testPSF.dim/2, testPSF.dim, backgroundLevel, 1.0/psfCoverage);
 
 		CUDA_CHECK_RETURN(cudaMemcpy(result[procIndex], deviceImageResult,
-				sizeof(short)*nelements, cudaMemcpyDeviceToHost));
+				sizeof(float)*nelements, cudaMemcpyDeviceToHost));
 	}
 
 	CUDA_CHECK_RETURN(cudaFree(devicePsf));
@@ -257,10 +261,10 @@ int main(int argc, char* argv[])
 	// Allocate Device memory 
 	trajectory *deviceTests;
 	trajectory *deviceSearchResults;
-	short *deviceImages;
+	float *deviceImages;
 
 	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceTests, sizeof(trajectory)*trajCount));
-	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceImages, sizeof(short)*nelements*imageCount));
+	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceImages, sizeof(float)*nelements*imageCount));
 	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceSearchResults, sizeof(trajectory)*nelements));
 	
 
@@ -272,7 +276,7 @@ int main(int argc, char* argv[])
 	for (int i=0; i<imageCount; ++i)
 	{
 		CUDA_CHECK_RETURN(cudaMemcpy(deviceImages+nelements*i, result[i],
-			sizeof(short)*nelements, cudaMemcpyHostToDevice));
+			sizeof(float)*nelements, cudaMemcpyHostToDevice));
 	}
 
 	int padding = 2*imageCount+int(psfSigma)+1;
@@ -295,6 +299,7 @@ int main(int argc, char* argv[])
 	
 	for (int i=0; i<15; ++i)
 	{
+		if (i+1 < 10) std::cout << " ";
 		std::cout << i+1 << ". Likelihood: "  << trajResult[i].lh 
 				 << " at x: " << trajResult[i].x << ", y: " << trajResult[i].y
                                  << "  and velocity x: " << trajResult[i].xVel 
@@ -307,7 +312,7 @@ int main(int argc, char* argv[])
 	std::cout << imageCount << " images, " <<
 			1.0*(t4 - t3)/(double) (CLOCKS_PER_SEC) << " seconds to test " 
 				<< trajCount << " possible trajectories starting from " 
-				<< (nelements-padding) << " pixels. " << "\n";
+				<< ((naxes[0]-padding)*(naxes[1]-padding)) << " pixels. " << "\n";
 
 
 
@@ -322,31 +327,37 @@ int main(int argc, char* argv[])
 		/* initialize status before calling fitsio routines */
 		status = 0;
 		/* Create file name */
-		ss << "../toyimages/original/T" << writeIndex+1 << ".fits";
+		ss << "../toyimages/original/T";
+		if (writeIndex+1<100) ss << "0";
+		if (writeIndex+1<10) ss << "0";
+		ss << writeIndex+1 << ".fits";
 		fits_create_file(&fptr, ss.str().c_str(), &status);
 		ss.str("");
 		ss.clear();
 
-		/* Create the primary array image (16-bit short integer pixels */
-		fits_create_img(fptr, SHORT_IMG, naxis, naxes, &status);
+		/* Create the primary array image (32-bit float pixels */
+		fits_create_img(fptr, FLOAT_IMG, naxis, naxes, &status);
 
-		/* Write the array of integers to the image */
-		fits_write_img(fptr, TSHORT, fpixel, nelements, pixelArray[writeIndex], &status);
+		/* Write the array of floats to the image */
+		fits_write_img(fptr, TFLOAT, fpixel, nelements, pixelArray[writeIndex], &status);
 		fits_close_file(fptr, &status);
 		fits_report_error(stderr, status);
 
 		status = 0;
 		/* Create file name */
-		ss << "../toyimages/convolved/T" << writeIndex+1 << "conv.fits";
+		ss << "../toyimages/convolved/T";
+		if (writeIndex+1<100) ss << "0";
+                if (writeIndex+1<10) ss << "0"; 
+                ss << writeIndex+1 << "conv.fits";
 		fits_create_file(&fptr, ss.str().c_str(), &status);
 		ss.str("");
 		ss.clear();
 
-		/* Create the primary array image (16-bit short integer pixels */
-		fits_create_img(fptr, SHORT_IMG, naxis, naxes, &status);
+		/* Create the primary array image (32-bit float pixels */
+		fits_create_img(fptr, FLOAT_IMG, naxis, naxes, &status);
 
 		/* Write the array of integers to the image */
-		fits_write_img(fptr, TSHORT, fpixel, nelements, result[writeIndex], &status);
+		fits_write_img(fptr, TFLOAT, fpixel, nelements, result[writeIndex], &status);
 		fits_close_file(fptr, &status);
 		fits_report_error(stderr, status);
 

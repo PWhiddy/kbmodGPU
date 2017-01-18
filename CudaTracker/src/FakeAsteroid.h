@@ -20,8 +20,10 @@ class FakeAsteroid
 {
 	public:
 		FakeAsteroid();
-		void createImage(short *image, int width, int height,
-			float xpos, float ypox, psfMatrix psf, float asteroidLevel, float noiseLevel);
+		void createImage(float *image, int width, int height,
+			float xpos, float ypox, psfMatrix psf, float asteroidLevel, 
+				    float backgroundLevel, float backgroundSigma);
+		
 		float generateGaussianNoise(float mu, float sigma);
 };
 
