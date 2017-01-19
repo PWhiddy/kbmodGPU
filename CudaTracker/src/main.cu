@@ -79,7 +79,7 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 		// #pragma unroll
 		for (int i=minX; i<=maxX; ++i)
 		{
-			sumDifference += (image[j*width+i] - background)
+			sumDifference += (image[j*width+i] /*- background*/)
 					 * psf[(j-minY)*psfDim+i-minX];
 		}
 	}
@@ -94,7 +94,7 @@ __global__ void convolvePSF(int width, int height, int imageCount,
  * for now only the single best trajectory starting at each pixel makes it to results. 
  */
 __global__ void searchImages(int width, int height, int imageCount, float *images, 
-	int trajectoryCount, trajectory *tests, trajectory *results, int edgePadding)
+	int trajectoryCount, trajectory *tests, trajectory *results, float mean, int edgePadding)
 {
 
 	// Get trajectory origin
@@ -105,7 +105,7 @@ __global__ void searchImages(int width, int height, int imageCount, float *image
 	    y < edgePadding || y + edgePadding > height) return;
 
 	trajectory best = { .xVel = 0.0, .yVel = 0.0, .lh = 0.0, 
-			     .x = x, .y = y, .itCount = trajectoryCount };
+		.x = x, .y = y, .itCount = trajectoryCount };
 	
 	for (int t=0; t<trajectoryCount; ++t)
 	{
@@ -116,7 +116,7 @@ __global__ void searchImages(int width, int height, int imageCount, float *image
 		{
 			currentLikelyhood += logf( images[ i*width*height + 
 				(y+int( yVel*float(i)))*width +
-				 x + int( xVel*float(i)) ] ); 	
+				 x+int( xVel*float(i)) ] / mean); 	
 		}
 		
 		if ( currentLikelyhood > best.lh )
@@ -235,7 +235,7 @@ int main(int argc, char* argv[])
 
 	std::clock_t t2 = std::clock();
 
-	std::cout << imageCount << " images, " <<
+	std::cout << imageCount << " images, convolution took " <<
 		1000.0*(t2 - t1)/(double) (CLOCKS_PER_SEC*imageCount) 
 		  << " ms per image\n";
 
@@ -302,7 +302,7 @@ int main(int argc, char* argv[])
 
 	// Launch Search
 	searchImages<<<blocks, threads>>> (naxes[0], naxes[1], imageCount, deviceImages,
-				trajCount, deviceTests, deviceSearchResults, padding);
+				trajCount, deviceTests, deviceSearchResults, backgroundLevel, padding);
 
 	// Read back results
 	CUDA_CHECK_RETURN(cudaMemcpy(trajResult, deviceSearchResults,
@@ -354,7 +354,7 @@ int main(int argc, char* argv[])
 			if (writeIndex+1<10) ss << "0"; 
 			ss << writeIndex+1 << "psi.fits";
 			writeFitsImg(fptr, ss.str().c_str(), fpixel, naxes, 
-				nelements, pixelArray[writeIndex]);
+				nelements, result[writeIndex]);
 			ss.str("");
 			ss.clear();
 		}
