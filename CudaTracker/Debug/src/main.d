@@ -177,6 +177,11 @@ src/main.o : ../src/main.cu \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/ostream.tcc \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/istream \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/istream.tcc \
+    /opt/apps/gcc/4.9.1/include/c++/4.9.1/fstream \
+    /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/codecvt.h \
+    /opt/apps/gcc/4.9.1/include/c++/4.9.1/x86_64-unknown-linux-gnu/bits/basic_file.h \
+    /opt/apps/gcc/4.9.1/include/c++/4.9.1/x86_64-unknown-linux-gnu/bits/c++io.h \
+    /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/fstream.tcc \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/numeric \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/bits/stl_numeric.h \
     /opt/apps/gcc/4.9.1/include/c++/4.9.1/sstream \

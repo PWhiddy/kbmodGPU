@@ -21,7 +21,7 @@ class GeneratorPSF
 	public:
 		GeneratorPSF();
 		psfMatrix createGaussian(float stdev);
-		float printPSF(psfMatrix p);
+		float printPSF(psfMatrix p, int debug);
 	private:
 		float gaussian(float x, float stdev);
 };

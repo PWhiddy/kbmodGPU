@@ -7,6 +7,7 @@
  */
 
 #include <iostream>
+#include <fstream>
 #include <numeric>
 #include <stdlib.h>
 #include <cstdlib>
@@ -19,6 +20,10 @@
 #include "GeneratorPSF.h"
 #include "FakeAsteroid.h"
 
+void writeFitsImg(fitsfile *f, const char *name, long fpix, 
+	long *naxes, long nelements, void *array);
+
+const char* parseLine(std::ifstream& cFile, int debug);
 
 static void CheckCudaErrorAux (const char *, unsigned, const char *, cudaError_t);
 #define CUDA_CHECK_RETURN(value) CheckCudaErrorAux(__FILE__,__LINE__, #value, value)
@@ -52,7 +57,8 @@ int compareTrajectory( const void * a, const void * b)
  * around each pixel in the provided image
  */
 __global__ void convolvePSF(int width, int height, int imageCount,
-		float *image, float *results, float *psf, int psfRad, int psfDim, float background, float normalization)
+	float *image, float *results, float *psf, int psfRad, 
+	int psfDim, float background, float normalization)
 {
 	// Find bounds of convolution area
 	const int x = blockIdx.x*32+threadIdx.x;
@@ -81,9 +87,13 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 
 }
 
-
+/*
+ * Searches through images (represented as a flat array of floats) looking for most likely
+ * trajectories in the given list. Outputs a results image of best trajectories. Note that
+ * for now only the single best trajectory starting at each pixel makes it to results. 
+ */
 __global__ void searchImages(int width, int height, int imageCount, float *images, 
-			      int trajectoryCount, trajectory *tests, trajectory *results, int edgePadding)
+	int trajectoryCount, trajectory *tests, trajectory *results, int edgePadding)
 {
 
 	// Get trajectory origin
@@ -104,7 +114,8 @@ __global__ void searchImages(int width, int height, int imageCount, float *image
 		for (int i=0; i<imageCount; ++i)
 		{
 			currentLikelyhood += logf( images[ i*width*height + 
-				(y+int( yVel*float(i)))*width + x + int( xVel*float(i)) ] ); 	
+				(y+int( yVel*float(i)))*width +
+				 x + int( xVel*float(i)) ] ); 	
 		}
 		
 		if ( currentLikelyhood > best.lh )
@@ -123,6 +134,26 @@ __global__ void searchImages(int width, int height, int imageCount, float *image
 int main(int argc, char* argv[])
 {
 
+	/* Read parameters from config file */
+
+	std::ifstream pFile ("parameters.config");
+    	if (!pFile.is_open()) 
+		std::cout << "Unable to open parameters file." << '\n';
+	
+	int debug             = atoi(parseLine(pFile, false));
+	int imageCount        = atoi(parseLine(pFile, debug));
+	float psfSigma        = atof(parseLine(pFile, debug));
+	float asteroidLevel   = atof(parseLine(pFile, debug));
+	float initialX        = atof(parseLine(pFile, debug));
+	float initialY        = atof(parseLine(pFile, debug));
+	float velocityX       = atof(parseLine(pFile, debug));
+	float velocityY       = atof(parseLine(pFile, debug));
+	float backgroundLevel = atof(parseLine(pFile, debug));
+	float backgroundSigma = atof(parseLine(pFile, debug));
+	//std::cout << name << " " << value << '\n';
+	pFile.close();
+        	
+	/*
 	float psfSigma = argc > 1 ? atof(argv[1]) : 1.0;
 
 	int imageCount = argc > 2 ? atoi(argv[2]) : 1;
@@ -134,21 +165,20 @@ int main(int argc, char* argv[])
 	float velocityY = 0.75;
 	float backgroundLevel = 1024.0;
 	float backgroundSigma = 32.0;
-
+	*/
 	GeneratorPSF *gen = new GeneratorPSF();
 
 	psfMatrix testPSF = gen->createGaussian(psfSigma);
 
-	float psfCoverage = gen->printPSF(testPSF);
+	float psfCoverage = gen->printPSF(testPSF, debug);
 
 	FakeAsteroid *asteroid = new FakeAsteroid();
 
 
-	/// Image/FITS Properties ///
+	/* Setup Image/FITS Properties of test Images  */
 
 	fitsfile *fptr;
-	int status;
-	long fpixel = 1, naxis = 2, nelements;//, exposure;
+	long fpixel = 1, /*naxis = 2,*/ nelements;//, exposure;
 	long naxes[2] = { 1024, 1024 }; // X and Y dimensions
 	nelements = naxes[0] * naxes[1];
 	std::stringstream ss;
@@ -160,13 +190,11 @@ int main(int argc, char* argv[])
 
 		/* Initialize the values in the image with noisy astro */
 
-		//float kernelNorm = 1.0/testPSF.kernel[testPSF.dim/2*testPSF.dim+testPSF.dim/2];
-
 		pixelArray[imageIndex] = new float[nelements];
 		asteroid->createImage( pixelArray[imageIndex], naxes[0], naxes[1],
-	 	    		velocityX*float(imageIndex)+initialX,  // Asteroid X position 
-				velocityY*float(imageIndex)+initialY, // Asteroid Y position
-				testPSF, asteroidLevel, backgroundLevel, backgroundSigma);
+	 	    	velocityX*float(imageIndex)+initialX,  // Asteroid X position 
+			velocityY*float(imageIndex)+initialY, // Asteroid Y position
+			testPSF, asteroidLevel, backgroundLevel, backgroundSigma);
 
 	}
 
@@ -179,9 +207,12 @@ int main(int argc, char* argv[])
 	ss.clear();
 	*/
 
+
+	/* Generate psi images on device */
+
 	std::clock_t t1 = std::clock();
 
-	// Process images on GPU //
+	// Pointers to device memory //
 	float **result = new float*[nelements];
 	float *devicePsf;
 	float *deviceImageSource;
@@ -196,7 +227,7 @@ int main(int argc, char* argv[])
 	CUDA_CHECK_RETURN(cudaMalloc((void **)&deviceImageResult, sizeof(float)*nelements));
 
 	CUDA_CHECK_RETURN(cudaMemcpy(devicePsf, testPSF.kernel,
-			sizeof(float)*testPSF.dim*testPSF.dim, cudaMemcpyHostToDevice));
+		sizeof(float)*testPSF.dim*testPSF.dim, cudaMemcpyHostToDevice));
 
 	for (int procIndex=0; procIndex<imageCount; ++procIndex)
 	{
@@ -204,13 +235,14 @@ int main(int argc, char* argv[])
 		result[procIndex] = new float[nelements];
 		// Copy image to
 		CUDA_CHECK_RETURN(cudaMemcpy(deviceImageSource, pixelArray[procIndex],
-				sizeof(float)*nelements, cudaMemcpyHostToDevice));
+			sizeof(float)*nelements, cudaMemcpyHostToDevice));
 
-		convolvePSF<<<blocks, threads>>> (naxes[0], naxes[1], imageCount, deviceImageSource,
-				deviceImageResult, devicePsf, testPSF.dim/2, testPSF.dim, backgroundLevel, 1.0/psfCoverage);
+		convolvePSF<<<blocks, threads>>> (naxes[0], naxes[1], 
+			imageCount, deviceImageSource, deviceImageResult, devicePsf, 
+			testPSF.dim/2, testPSF.dim, backgroundLevel, 1.0/psfCoverage);
 
 		CUDA_CHECK_RETURN(cudaMemcpy(result[procIndex], deviceImageResult,
-				sizeof(float)*nelements, cudaMemcpyDeviceToHost));
+			sizeof(float)*nelements, cudaMemcpyDeviceToHost));
 	}
 
 	CUDA_CHECK_RETURN(cudaFree(devicePsf));
@@ -220,16 +252,13 @@ int main(int argc, char* argv[])
 	std::clock_t t2 = std::clock();
 
 	std::cout << imageCount << " images, " <<
-			1000.0*(t2 - t1)/(double) (CLOCKS_PER_SEC*imageCount) << " ms per image\n";
+		1000.0*(t2 - t1)/(double) (CLOCKS_PER_SEC*imageCount) 
+		  << " ms per image\n";
 
-	
-	///////////////// ADDING IMAGE SEARCHING CODE HERE ////////////////
 
+	///* Search images on GPU *///
 	
 	std::clock_t t3 = std::clock();
-
-	// Search images on GPU //
-	
 		
 	// Setup trajectories to test 
 	const int anglesCount = 100;
@@ -251,9 +280,6 @@ int main(int argc, char* argv[])
 			trajTests[a*velocitiesCount+v].yVel = sin(angles[a])*velocities[v]; 
 		}
 	}
-	
-	//dim3 blocks(32,32);
-	//dim3 threads(32,32);
 
 	// Allocate Host memory to store results in
 	trajectory* trajResult = new trajectory[nelements];
@@ -272,7 +298,7 @@ int main(int argc, char* argv[])
 	CUDA_CHECK_RETURN(cudaMemcpy(deviceTests, trajTests,
 			sizeof(trajectory)*trajCount, cudaMemcpyHostToDevice));
 
-	// Copy over convolved images one at a time
+	// Copy over psi images one at a time
 	for (int i=0; i<imageCount; ++i)
 	{
 		CUDA_CHECK_RETURN(cudaMemcpy(deviceImages+nelements*i, result[i],
@@ -294,7 +320,7 @@ int main(int argc, char* argv[])
 	CUDA_CHECK_RETURN(cudaFree(deviceImages));
 
 	
-	// Find most likely trajectories
+	// Sort results by likelihood
 	qsort( trajResult, nelements, sizeof(trajectory), compareTrajectory);
 	
 	for (int i=0; i<15; ++i)
@@ -314,37 +340,33 @@ int main(int argc, char* argv[])
 				<< trajCount << " possible trajectories starting from " 
 				<< ((naxes[0]-padding)*(naxes[1]-padding)) << " pixels. " << "\n";
 
-
-
-	//////////////// END IMAGE SEARCHING CODE /////////////////
-
-
 	std::cout << "Writing images to file... ";
 
 	// Write images to file (TODO: encapsulate in method)
 	for (int writeIndex=0; writeIndex<imageCount; ++writeIndex)
 	{
-		/* initialize status before calling fitsio routines */
-		status = 0;
 		/* Create file name */
 		ss << "../toyimages/original/T";
 		if (writeIndex+1<100) ss << "0";
 		if (writeIndex+1<10) ss << "0";
 		ss << writeIndex+1 << ".fits";
-		fits_create_file(&fptr, ss.str().c_str(), &status);
+		writeFitsImg(fptr, ss.str().c_str(), fpixel, naxes, nelements, pixelArray[writeIndex]);
 		ss.str("");
 		ss.clear();
-
-		/* Create the primary array image (32-bit float pixels */
+		//void writeFitsImg(fitsfile *f, const char *name, long *fpix, long *naxes, long nelements, void *array)
+		
+		/*
+		/ * Create the primary array image (32-bit float pixels * /
 		fits_create_img(fptr, FLOAT_IMG, naxis, naxes, &status);
 
-		/* Write the array of floats to the image */
+		/ * Write the array of floats to the image * /
 		fits_write_img(fptr, TFLOAT, fpixel, nelements, pixelArray[writeIndex], &status);
 		fits_close_file(fptr, &status);
 		fits_report_error(stderr, status);
+				
 
 		status = 0;
-		/* Create file name */
+		/ * Create file name * /
 		ss << "../toyimages/convolved/T";
 		if (writeIndex+1<100) ss << "0";
                 if (writeIndex+1<10) ss << "0"; 
@@ -353,14 +375,14 @@ int main(int argc, char* argv[])
 		ss.str("");
 		ss.clear();
 
-		/* Create the primary array image (32-bit float pixels */
+		/ * Create the primary array image (32-bit float pixels * /
 		fits_create_img(fptr, FLOAT_IMG, naxis, naxes, &status);
 
-		/* Write the array of integers to the image */
+		/ * Write the array of integers to the image * /
 		fits_write_img(fptr, TFLOAT, fpixel, nelements, result[writeIndex], &status);
 		fits_close_file(fptr, &status);
 		fits_report_error(stderr, status);
-
+		*/
 	}
 
 	std::cout << "Done.\n";
@@ -397,6 +419,36 @@ int main(int argc, char* argv[])
 
 	return 0;
 } 
+
+const char* parseLine(std::ifstream& pFile, int debug)
+{
+	std::string line;
+	getline(pFile, line);
+        int delimiterPos = line.find(":");
+	if (debug) 
+	{
+		std::cout << line.substr(0, delimiterPos );
+		std::cout << " : " << line.substr(delimiterPos + 2) << "\n";
+	}
+	return (line.substr(delimiterPos + 2)).c_str();
+}
+
+void writeFitsImg(fitsfile *f, const char *name, long fpix, long *naxes, long nelements, void *array)
+{
+	/* initialize status before calling fitsio routines */
+	int status = 0;
+        /* Create file with name */
+	fits_create_file(&f, name, &status);
+
+	/* Create the primary array image (32-bit float pixels */
+	fits_create_img(f, FLOAT_IMG, 2 /*naxis*/, naxes, &status);
+
+	/* Write the array of floats to the image */
+	fits_write_img(f, TFLOAT, 1, nelements, array, &status);
+	fits_close_file(f, &status);
+	fits_report_error(stderr, status);
+}
+
 
 /**
  * Check the return value of the CUDA runtime API call and exit
