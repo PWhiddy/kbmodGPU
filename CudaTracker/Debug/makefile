@@ -58,7 +58,7 @@ all: CudaTracker
 CudaTracker: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: NVCC Linker'
-	/usr/local/cuda-8.0/bin/nvcc --cudart static -Xlinker -lgomp --relocatable-device-code=false -gencode arch=compute_52,code=compute_52 -gencode arch=compute_52,code=sm_52 -link -o  "CudaTracker" $(OBJS) $(USER_OBJS) $(LIBS)
+	nvcc --cudart static -Xlinker -lgomp --relocatable-device-code=false -gencode arch=compute_30,code=compute_30 -gencode arch=compute_30,code=sm_30 -link -o  "CudaTracker" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 

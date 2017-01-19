@@ -13,7 +13,7 @@
 
 struct psfMatrix {
 	float *kernel;
-	unsigned int dim;
+	int dim;
 };
 
 class GeneratorPSF
@@ -21,7 +21,7 @@ class GeneratorPSF
 	public:
 		GeneratorPSF();
 		psfMatrix createGaussian(float stdev);
-		void printPSF(psfMatrix p);
+		float printPSF(psfMatrix p, int debug);
 	private:
 		float gaussian(float x, float stdev);
 };
