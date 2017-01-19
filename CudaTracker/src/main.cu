@@ -135,7 +135,6 @@ int main(int argc, char* argv[])
 {
 
 	/* Read parameters from config file */
-
 	std::ifstream pFile ("parameters.config");
     	if (!pFile.is_open()) 
 		std::cout << "Unable to open parameters file." << '\n';
@@ -150,22 +149,16 @@ int main(int argc, char* argv[])
 	float velocityY       = atof(parseLine(pFile, debug));
 	float backgroundLevel = atof(parseLine(pFile, debug));
 	float backgroundSigma = atof(parseLine(pFile, debug));
-	//std::cout << name << " " << value << '\n';
+	int anglesCount       = atoi(parseLine(pFile, debug));
+	int velocitySteps     = atoi(parseLine(pFile, debug));
+	float minVelocity     = atof(parseLine(pFile, debug));
+	float maxVelocity     = atof(parseLine(pFile, debug));
+	int writeFiles        = atoi(parseLine(pFile, debug));
+	std::string origPath  = parseLine(pFile, debug);
+	std::string psiPath   = parseLine(pFile, debug);
 	pFile.close();
-        	
-	/*
-	float psfSigma = argc > 1 ? atof(argv[1]) : 1.0;
-
-	int imageCount = argc > 2 ? atoi(argv[2]) : 1;
-	
-	float asteroidLevel = 500;
-	float initialX = 235.0;
-	float initialY = 680.0;
-	float velocityX = 0.6;
-	float velocityY = 0.75;
-	float backgroundLevel = 1024.0;
-	float backgroundSigma = 32.0;
-	*/
+     
+	/* Create instances of psf and object generators */
 	GeneratorPSF *gen = new GeneratorPSF();
 
 	psfMatrix testPSF = gen->createGaussian(psfSigma);
@@ -176,7 +169,6 @@ int main(int argc, char* argv[])
 
 
 	/* Setup Image/FITS Properties of test Images  */
-
 	fitsfile *fptr;
 	long fpixel = 1, /*naxis = 2,*/ nelements;//, exposure;
 	long naxes[2] = { 1024, 1024 }; // X and Y dimensions
@@ -260,24 +252,28 @@ int main(int argc, char* argv[])
 	
 	std::clock_t t3 = std::clock();
 		
-	// Setup trajectories to test 
-	const int anglesCount = 100;
-	float angles[anglesCount];
-	for (int an=0; an<anglesCount; ++an)
+	/* Create test trajectories */
+	float *angles = new float[anglesCount];
+	for (int i=0; i<anglesCount; ++i)
 	{
-		angles[an] = 6.283185*float(an)/float(anglesCount);
+		angles[i] = 6.283185*float(i)/float(anglesCount);
 	}
-	const int velocitiesCount = 16;
-	float velocities [velocitiesCount] = { 0.80, 0.82, 0.84, 0.86, 0.88, 0.90, 0.92,
-				  0.94, 0.96, 0.98, 1.00, 1.02, 1.04, 0.06, 1.08, 1.12 }; 
-	int trajCount = anglesCount*velocitiesCount;
+
+	float *velocities = new float[velocitySteps];
+	float dv = (maxVelocity-minVelocity)/float(velocitySteps);
+	for (int i=0; i<velocitySteps; ++i)
+	{
+		velocities[i] = minVelocity+float(i)*dv;	
+	}	
+ 
+	int trajCount = anglesCount*velocitySteps;
 	trajectory *trajTests = new trajectory[trajCount];
 	for (int a=0; a<anglesCount; ++a)
 	{
-		for (int v=0; v<velocitiesCount; ++v)
+		for (int v=0; v<velocitySteps; ++v)
 		{
-			trajTests[a*velocitiesCount+v].xVel = cos(angles[a])*velocities[v];
-			trajTests[a*velocitiesCount+v].yVel = sin(angles[a])*velocities[v]; 
+			trajTests[a*velocitySteps+v].xVel = cos(angles[a])*velocities[v];
+			trajTests[a*velocitySteps+v].yVel = sin(angles[a])*velocities[v]; 
 		}
 	}
 
@@ -305,6 +301,7 @@ int main(int argc, char* argv[])
 			sizeof(float)*nelements, cudaMemcpyHostToDevice));
 	}
 
+	// assumes object is not moving more than 2 pixels per image
 	int padding = 2*imageCount+int(psfSigma)+1;
 
 	// Launch Search
@@ -321,78 +318,60 @@ int main(int argc, char* argv[])
 
 	
 	// Sort results by likelihood
-	qsort( trajResult, nelements, sizeof(trajectory), compareTrajectory);
-	
-	for (int i=0; i<15; ++i)
+	qsort(trajResult, nelements, sizeof(trajectory), compareTrajectory);
+	if (debug)
 	{
-		if (i+1 < 10) std::cout << " ";
-		std::cout << i+1 << ". Likelihood: "  << trajResult[i].lh 
-				 << " at x: " << trajResult[i].x << ", y: " << trajResult[i].y
-                                 << "  and velocity x: " << trajResult[i].xVel 
-				 << ", y: " << trajResult[i].yVel << "\n" ;
+		for (int i=0; i<15; ++i)
+		{
+			if (i+1 < 10) std::cout << " ";
+			std::cout << i+1 << ". Likelihood: "  << trajResult[i].lh 
+				  << " at x: " << trajResult[i].x << ", y: " << trajResult[i].y
+				  << "  and velocity x: " << trajResult[i].xVel 
+				  << ", y: " << trajResult[i].yVel << "\n" ;
+		}
 	}
-	
 
 	std::clock_t t4 = std::clock();
 
 	std::cout << imageCount << " images, " <<
-			1.0*(t4 - t3)/(double) (CLOCKS_PER_SEC) << " seconds to test " 
-				<< trajCount << " possible trajectories starting from " 
-				<< ((naxes[0]-padding)*(naxes[1]-padding)) << " pixels. " << "\n";
+		1.0*(t4 - t3)/(double) (CLOCKS_PER_SEC) << " seconds to test " 
+		<< trajCount << " possible trajectories starting from " 
+		<< ((naxes[0]-padding)*(naxes[1]-padding)) << " pixels. " << "\n";
 
 	std::cout << "Writing images to file... ";
 
-	// Write images to file (TODO: encapsulate in method)
-	for (int writeIndex=0; writeIndex<imageCount; ++writeIndex)
+	// Write images to file 
+	if (writeFiles)
 	{
-		/* Create file name */
-		ss << "../toyimages/original/T";
-		if (writeIndex+1<100) ss << "0";
-		if (writeIndex+1<10) ss << "0";
-		ss << writeIndex+1 << ".fits";
-		writeFitsImg(fptr, ss.str().c_str(), fpixel, naxes, nelements, pixelArray[writeIndex]);
-		ss.str("");
-		ss.clear();
-		//void writeFitsImg(fitsfile *f, const char *name, long *fpix, long *naxes, long nelements, void *array)
-		
-		/*
-		/ * Create the primary array image (32-bit float pixels * /
-		fits_create_img(fptr, FLOAT_IMG, naxis, naxes, &status);
+		for (int writeIndex=0; writeIndex<imageCount; ++writeIndex)
+		{
+			/* Create file name */
+			ss << origPath << "T";
+			// Add leading zeros to filename
+			if (writeIndex+1<100) ss << "0";
+			if (writeIndex+1<10) ss << "0";
+			ss << writeIndex+1 << ".fits";
+			writeFitsImg(fptr, ss.str().c_str(), fpixel, naxes, 
+				nelements, pixelArray[writeIndex]);
+			ss.str("");
+			ss.clear();		
 
-		/ * Write the array of floats to the image * /
-		fits_write_img(fptr, TFLOAT, fpixel, nelements, pixelArray[writeIndex], &status);
-		fits_close_file(fptr, &status);
-		fits_report_error(stderr, status);
-				
-
-		status = 0;
-		/ * Create file name * /
-		ss << "../toyimages/convolved/T";
-		if (writeIndex+1<100) ss << "0";
-                if (writeIndex+1<10) ss << "0"; 
-                ss << writeIndex+1 << "conv.fits";
-		fits_create_file(&fptr, ss.str().c_str(), &status);
-		ss.str("");
-		ss.clear();
-
-		/ * Create the primary array image (32-bit float pixels * /
-		fits_create_img(fptr, FLOAT_IMG, naxis, naxes, &status);
-
-		/ * Write the array of integers to the image * /
-		fits_write_img(fptr, TFLOAT, fpixel, nelements, result[writeIndex], &status);
-		fits_close_file(fptr, &status);
-		fits_report_error(stderr, status);
-		*/
+			ss << psiPath << "T";
+			if (writeIndex+1<100) ss << "0";
+			if (writeIndex+1<10) ss << "0"; 
+			ss << writeIndex+1 << "psi.fits";
+			writeFitsImg(fptr, ss.str().c_str(), fpixel, naxes, 
+				nelements, pixelArray[writeIndex]);
+			ss.str("");
+			ss.clear();
+		}
 	}
-
 	std::cout << "Done.\n";
-	
-	std::freopen("results.txt", "w", stdout);
 
-	std::cout << "# t0_x t0_y theta_par theta_perp v_x v_y likelihood est_flux\n";
-
-	
+	/* Write results file */
 	// std::cout needs to be rerouted to output to console after this...
+	std::freopen("results.txt", "w", stdout);
+	std::cout << "# t0_x t0_y theta_par theta_perp v_x v_y likelihood est_flux\n";
         for (int i=0; i<20; ++i)
         {
                 std::cout << trajResult[i].x << " " << trajResult[i].y << " 0.0 0.0 "
@@ -412,6 +391,9 @@ int main(int argc, char* argv[])
 	delete[] pixelArray;
 	delete[] result;
 	
+	delete[] angles;
+	delete[] velocities;
+	delete[] trajTests;	
 	delete[] trajResult;
 	
 	delete gen;
