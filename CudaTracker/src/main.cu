@@ -63,13 +63,14 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 	// Find bounds of convolution area
 	const int x = blockIdx.x*32+threadIdx.x;
 	const int y = blockIdx.y*32+threadIdx.y;
+	if (x < 0 || x > width || y < 0 || y > height) return;
 	const int minX = max(x-psfRad, 0);
 	const int minY = max(y-psfRad, 0);
 	const int maxX = min(x+psfRad, width-1);
 	const int maxY = min(y+psfRad, height-1);
 	const int dx = maxX-minX;
 	const int dy = maxY-minY;
-	if (dx < 1 || dy < 1 ) return;
+	if (dx < psfRad || dy < psfRad ) return;
  
 	// Read kernel
 	float sumDifference = 0.0;
@@ -127,7 +128,6 @@ __global__ void searchImages(int width, int height, int imageCount, float *image
 	}	
 	
 	results[ y*width + x ] = best;	
-
 }
 
 
@@ -141,6 +141,8 @@ int main(int argc, char* argv[])
 	
 	int debug             = atoi(parseLine(pFile, false));
 	int imageCount        = atoi(parseLine(pFile, debug));
+	int imgWidth          = atoi(parseLine(pFile, debug));
+	int imgHeight         = atoi(parseLine(pFile, debug));
 	float psfSigma        = atof(parseLine(pFile, debug));
 	float asteroidLevel   = atof(parseLine(pFile, debug));
 	float initialX        = atof(parseLine(pFile, debug));
@@ -167,11 +169,10 @@ int main(int argc, char* argv[])
 
 	FakeAsteroid *asteroid = new FakeAsteroid();
 
-
 	/* Setup Image/FITS Properties of test Images  */
 	fitsfile *fptr;
 	long fpixel = 1, /*naxis = 2,*/ nelements;//, exposure;
-	long naxes[2] = { 1024, 1024 }; // X and Y dimensions
+	long naxes[2] = { imgWidth, imgHeight }; // X and Y dimensions
 	nelements = naxes[0] * naxes[1];
 	std::stringstream ss;
 	float **pixelArray = new float*[imageCount];
@@ -179,26 +180,17 @@ int main(int argc, char* argv[])
 	// Create asteroid images //
 	for (int imageIndex=0; imageIndex<imageCount; ++imageIndex)
 	{
-
 		/* Initialize the values in the image with noisy astro */
-
 		pixelArray[imageIndex] = new float[nelements];
 		asteroid->createImage( pixelArray[imageIndex], naxes[0], naxes[1],
 	 	    	velocityX*float(imageIndex)+initialX,  // Asteroid X position 
 			velocityY*float(imageIndex)+initialY, // Asteroid Y position
 			testPSF, asteroidLevel, backgroundLevel, backgroundSigma);
-
 	}
 
 	/*
-	// Load real image into first slot
-	ss << "../realImg.fits";
-	fits_open_data(&fptr, ss.str().c_str(), READONLY, &status);
-	fits_report_error(stderr, status);
-	ss.str("");
-	ss.clear();
-	*/
-
+	 *  TODO: Loading real FITS images would go here
+	 */
 
 	/* Generate psi images on device */
 
@@ -210,7 +202,7 @@ int main(int argc, char* argv[])
 	float *deviceImageSource;
 	float *deviceImageResult;
 
-	dim3 blocks(32,32);
+	dim3 blocks(naxes[0]/32+1,naxes[1]/32+1);
 	dim3 threads(32,32);
 
 	// Allocate Device memory
@@ -276,6 +268,13 @@ int main(int argc, char* argv[])
 			trajTests[a*velocitySteps+v].yVel = sin(angles[a])*velocities[v]; 
 		}
 	}
+	
+	/* Prepare Search */
+	
+	// assumes object is not moving more than 2 pixels per image
+	int padding = 2*imageCount+int(psfSigma)+1;
+	std::cout << "Searching " << trajCount << " possible trajectories starting from " 
+		<< ((naxes[0]-padding)*(naxes[1]-padding)) << " pixels... " << "\n";
 
 	// Allocate Host memory to store results in
 	trajectory* trajResult = new trajectory[nelements];
@@ -300,9 +299,6 @@ int main(int argc, char* argv[])
 		CUDA_CHECK_RETURN(cudaMemcpy(deviceImages+nelements*i, result[i],
 			sizeof(float)*nelements, cudaMemcpyHostToDevice));
 	}
-
-	// assumes object is not moving more than 2 pixels per image
-	int padding = 2*imageCount+int(psfSigma)+1;
 
 	// Launch Search
 	searchImages<<<blocks, threads>>> (naxes[0], naxes[1], imageCount, deviceImages,
@@ -333,11 +329,8 @@ int main(int argc, char* argv[])
 
 	std::clock_t t4 = std::clock();
 
-	std::cout << imageCount << " images, " <<
-		1.0*(t4 - t3)/(double) (CLOCKS_PER_SEC) << " seconds to test " 
-		<< trajCount << " possible trajectories starting from " 
-		<< ((naxes[0]-padding)*(naxes[1]-padding)) << " pixels. " << "\n";
-
+	std::cout << "Took " << 1.0*(t4 - t3)/(double) (CLOCKS_PER_SEC)
+		  << " seconds to complete search.\n"; 
 	std::cout << "Writing images to file... ";
 
 	// Write images to file 
@@ -406,7 +399,8 @@ const char* parseLine(std::ifstream& pFile, int debug)
 {
 	std::string line;
 	getline(pFile, line);
-        int delimiterPos = line.find(":");
+        // Read entry to the right of the ":" symbol
+	int delimiterPos = line.find(":");
 	if (debug) 
 	{
 		std::cout << line.substr(0, delimiterPos );
