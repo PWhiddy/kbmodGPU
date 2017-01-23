@@ -79,7 +79,7 @@ __global__ void convolvePSF(int width, int height, int imageCount,
 		// #pragma unroll
 		for (int i=minX; i<=maxX; ++i)
 		{
-			sumDifference += (image[j*width+i] /*- background*/)
+			sumDifference += (image[j*width+i] - background)
 					 * psf[(j-minY)*psfDim+i-minX];
 		}
 	}
@@ -114,9 +114,9 @@ __global__ void searchImages(int width, int height, int imageCount, float *image
 		float currentLikelyhood = 0.0;
 		for (int i=0; i<imageCount; ++i)
 		{
-			currentLikelyhood += logf( images[ i*width*height + 
+			currentLikelyhood += images[ i*width*height + 
 				(y+int( yVel*float(i)))*width +
-				 x+int( xVel*float(i)) ] / mean); 	
+				 x+int( xVel*float(i)) ] / mean; 	
 		}
 		
 		if ( currentLikelyhood > best.lh )
